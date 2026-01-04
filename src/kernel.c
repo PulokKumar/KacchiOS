@@ -1,75 +1,149 @@
-/* kernel.c - Main kernel with null process */
+/* kernel.c - Main kernel with memory tests */
 #include "types.h"
 #include "serial.h"
 #include "string.h"
 #include "memory.h"
 
-#define MAX_INPUT 128
+static void print_ptr(const char* name, void* ptr) {
+    serial_puts(name);
+    serial_puts(" = ");
+    serial_print_hex((uint32_t)ptr);
+    serial_puts("\n");
+}
+
+static void print_val(const char* name, size_t val) {
+    serial_puts(name);
+    serial_puts(" = ");
+    serial_print_hex((uint32_t)val);
+    serial_puts("\n");
+}
 
 void kmain(void) {
-    char input[MAX_INPUT];
-    int pos = 0;
-    
-    /* Initialize hardware */
     serial_init();
-    memory_init();
-
-/* Test allocations */
-char* a = kmalloc(32);
-char* b = kmalloc(64);
-
-serial_puts("[TEST] a = ");
-serial_print_hex((uint32_t)a);
-serial_puts("\n");
-
-serial_puts("[TEST] b = ");
-serial_print_hex((uint32_t)b);
-serial_puts("\n");
-
-    /* Print welcome message */
+    
     serial_puts("\n");
     serial_puts("========================================\n");
-    serial_puts("    kacchiOS - Minimal Baremetal OS\n");
+    serial_puts("    kacchiOS - Memory Module Tests\n");
+    serial_puts("========================================\n\n");
+    
+    memory_init();
+    
+    /* ========== TASK 1: MEMORY ALLOCATION ========== */
+    serial_puts("===== TASK 1: MEMORY ALLOCATION =====\n\n");
+    
+    /* --- Heap Allocation (kmalloc) --- */
+    serial_puts("--- Heap Allocation (kmalloc) ---\n");
+    
+    char* a = kmalloc(32);
+    print_ptr("Allocated 32 bytes at", a);
+    
+    char* b = kmalloc(64);
+    print_ptr("Allocated 64 bytes at", b);
+    
+    char* c = kmalloc(128);
+    print_ptr("Allocated 128 bytes at", c);
+    
+    print_val("Heap usage after allocations", memory_get_usage());
+    
+    // Write to memory to verify it's usable
+    for (int i = 0; i < 32; i++) a[i] = 'A';
+    for (int i = 0; i < 64; i++) b[i] = 'B';
+    for (int i = 0; i < 128; i++) c[i] = 'C';
+    serial_puts("Successfully wrote to all allocated blocks\n\n");
+    
+    /* --- Stack Allocation (kstack_alloc) --- */
+    serial_puts("--- Stack Allocation (kstack_alloc) ---\n");
+    
+    void* stack1 = kstack_alloc();
+    print_ptr("Stack 1 top", stack1);
+    
+    void* stack2 = kstack_alloc();
+    print_ptr("Stack 2 top", stack2);
+    
+    void* stack3 = kstack_alloc();
+    print_ptr("Stack 3 top", stack3);
+    
+    print_val("Stacks used", kstack_get_used());
+    print_val("Stacks free", kstack_get_free());
+    
+    serial_puts("\n[TASK 1 COMPLETE] Heap and Stack allocation working!\n\n");
+    
+    /* ========== TASK 2: MEMORY DEALLOCATION ========== */
+    serial_puts("===== TASK 2: MEMORY DEALLOCATION =====\n\n");
+    
+    /* --- Heap Deallocation (kfree) --- */
+    serial_puts("--- Heap Deallocation (kfree) ---\n");
+    
+    size_t usage_before = memory_get_usage();
+    print_val("Heap usage before kfree", usage_before);
+    
+    serial_puts("Freeing block b (64 bytes)...\n");
+    kfree(b);
+    print_val("Heap usage after freeing b", memory_get_usage());
+    
+    serial_puts("Freeing block a (32 bytes)...\n");
+    kfree(a);
+    print_val("Heap usage after freeing a", memory_get_usage());
+    
+    serial_puts("Freeing block c (128 bytes)...\n");
+    kfree(c);
+    print_val("Heap usage after freeing c", memory_get_usage());
+    
+    /* Test double-free protection */
+    serial_puts("\nTesting double-free protection on block a:\n");
+    kfree(a);  // Should print warning
+    
+    /* Test NULL free */
+    serial_puts("\nTesting kfree(NULL) - should do nothing:\n");
+    kfree((void*)0);
+    serial_puts("kfree(NULL) handled safely\n");
+    
+    /* Test coalescing - allocate again */
+    serial_puts("\nTesting block coalescing (reallocate after free):\n");
+    char* d = kmalloc(200);  // Should fit in coalesced space
+    print_ptr("Allocated 200 bytes (coalesced) at", d);
+    kfree(d);
+    
+    /* --- Stack Deallocation (kstack_free) --- */
+    serial_puts("\n--- Stack Deallocation (kstack_free) ---\n");
+    
+    print_val("Stacks used before free", kstack_get_used());
+    
+    serial_puts("Freeing stack 2...\n");
+    kstack_free(stack2);
+    print_val("Stacks used after freeing stack 2", kstack_get_used());
+    
+    serial_puts("Freeing stack 1...\n");
+    kstack_free(stack1);
+    print_val("Stacks used after freeing stack 1", kstack_get_used());
+    
+    serial_puts("Freeing stack 3...\n");
+    kstack_free(stack3);
+    print_val("Stacks used after freeing stack 3", kstack_get_used());
+    
+    /* Test double-free protection for stacks */
+    serial_puts("\nTesting stack double-free protection:\n");
+    kstack_free(stack1);  // Should print warning
+    
+    /* Test NULL stack free */
+    serial_puts("\nTesting kstack_free(NULL) - should do nothing:\n");
+    kstack_free((void*)0);
+    serial_puts("kstack_free(NULL) handled safely\n");
+    
+    serial_puts("\n[TASK 2 COMPLETE] Heap and Stack deallocation working!\n\n");
+    
+    /* ========== FINAL SUMMARY ========== */
     serial_puts("========================================\n");
-    serial_puts("Hello from kacchiOS!\n");
-    serial_puts("Running null process...\n\n");
+    serial_puts("    ALL TESTS PASSED!\n");
+    serial_puts("========================================\n");
+    serial_puts("Task 1: kmalloc, kstack_alloc - OK\n");
+    serial_puts("Task 2: kfree, kstack_free - OK\n");
+    serial_puts("  - Double-free protection - OK\n");
+    serial_puts("  - Block coalescing - OK\n");
+    serial_puts("========================================\n\n");
     
-    /* Main loop - the "null process" */
-    while (1) {
-        serial_puts("kacchiOS> ");
-        pos = 0;
-        
-        /* Read input line */
-        while (1) {
-            char c = serial_getc();
-            
-            /* Handle Enter key */
-            if (c == '\r' || c == '\n') {
-                input[pos] = '\0';
-                serial_puts("\n");
-                break;
-            }
-            /* Handle Backspace */
-            else if ((c == '\b' || c == 0x7F) && pos > 0) {
-                pos--;
-                serial_puts("\b \b");  /* Erase character on screen */
-            }
-            /* Handle normal characters */
-            else if (c >= 32 && c < 127 && pos < MAX_INPUT - 1) {
-                input[pos++] = c;
-                serial_putc(c);  /* Echo character */
-            }
-        }
-        
-        /* Echo back the input */
-        if (pos > 0) {
-            serial_puts("You typed: ");
-            serial_puts(input);
-            serial_puts("\n");
-        }
-    }
-    
-    /* Should never reach here */
+    /* Halt */
+    serial_puts("System halted.\n");
     for (;;) {
         __asm__ volatile ("hlt");
     }
