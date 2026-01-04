@@ -1,16 +1,16 @@
 # Makefile for kacchiOS - with src/ folder
-CC = gcc
-LD = ld
-AS = as
+CC = i686-elf-gcc
+LD = i686-elf-ld
+AS = i686-elf-as
 
 CFLAGS = -m32 -ffreestanding -O2 -Wall -Wextra -nostdinc -fno-builtin -fno-stack-protector -Isrc
 ASFLAGS = --32
 LDFLAGS = -m elf_i386 -T src/link.ld
 
 # Source files are in src/
-SRCS = src/boot.S src/kernel.c src/serial.c src/memory.c src/string.c
+SRCS = src/boot.S src/kernel.c src/serial.c src/memory.c src/string.c src/process.c src/scheduler.c
 
-OBJS = boot.o kernel.o serial.o memory.o string.o
+OBJS = boot.o kernel.o serial.o memory.o string.o process.o scheduler.o
 
 all: kernel.elf
 
@@ -32,6 +32,12 @@ memory.o: src/memory.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 string.o: src/string.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+process.o: src/process.c
+	$(CC) $(CFLAGS) -c $< -o $@
+
+scheduler.o: src/scheduler.c
 	$(CC) $(CFLAGS) -c $< -o $@
 
 run: kernel.elf

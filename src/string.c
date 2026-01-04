@@ -22,3 +22,8 @@ char* strcpy(char* dest, const char* src) {
     while ((*dest++ = *src++));
     return original_dest;
 }
+
+/* Alias for strcpy (used by process.c) */
+char* str_copy(char* dest, const char* src) {
+    return strcpy(dest, src);
+}
